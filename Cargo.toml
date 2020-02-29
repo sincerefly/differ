@@ -1,0 +1,28 @@
+[package]
+name = "differ"
+version = "0.1.0"
+authors = ["Yieldone <yieldone@pm.me>"]
+edition = "2018"
+
+[dependencies]
+rust-crypto = "^0.2"
+serde_json = "1.0"
+walkdir = "2"
+zip = "0.3"
+colored = "1.9.3"
+
+[features]
+flate2 = []
+bzip2 = []
+
+[[example]]
+name = "file_md5"
+path = "src/examples/file_md5.rs"
+
+[[example]]
+name = "zip_archive"
+path = "src/examples/zip_archive.rs"
+
+[[example]]
+name = "copy_file"
+path = "src/examples/copy_file.rs"
