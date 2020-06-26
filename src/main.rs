@@ -28,15 +28,20 @@ mod compress;
  */
 fn get_md5(file_path: &String) -> String {
 
+    // file md5
     let mut buffer = Vec::new();
     let mut hasher = Md5::new();
 
     let mut f = File::open(file_path.to_owned()).unwrap();
-
     f.read_to_end(&mut buffer).unwrap();
     hasher.input(&buffer);
+    let file_md5 = hasher.result_str();
 
-    hasher.result_str()
+    // file identifier: md5(md5(file) + file_path)
+    let mut id_hasher = Md5::new();
+    id_hasher.input(&(file_md5 + &file_path).into_bytes());
+
+    id_hasher.result_str()
 }
 
 /*
