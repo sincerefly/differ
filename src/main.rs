@@ -26,7 +26,7 @@ mod compress;
 /*
  * Got file md5
  */
-fn get_md5(file_path: &String) -> String {
+fn get_md5(file_path: &String, inner_path: &String) -> String {
 
     // file md5
     let mut buffer = Vec::new();
@@ -39,7 +39,7 @@ fn get_md5(file_path: &String) -> String {
 
     // file identifier: md5(md5(file) + file_path)
     let mut id_hasher = Md5::new();
-    id_hasher.input(&(file_md5 + &file_path).into_bytes());
+    id_hasher.input(&(file_md5 + &inner_path).into_bytes());
 
     id_hasher.result_str()
 }
@@ -68,7 +68,7 @@ fn path_info(path: &String) -> (HashMap<String, String>, Vec<String>) {
             println!(" {}                                  {}", "DIR".green(), &path);
         } else {
             file_list.push(inner_path.clone());
-            let md5_str = get_md5(&path);
+            let md5_str = get_md5(&path, &inner_path.clone());
             file_dict.insert(md5_str.clone(), inner_path.clone());
             println!("{} {} {}", "FILE".green(), md5_str, &path);
         }
