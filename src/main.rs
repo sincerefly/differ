@@ -1,9 +1,3 @@
-extern crate walkdir;
-extern crate crypto;
-extern crate zip;
-#[macro_use]
-extern crate serde_json;
-
 use colored::*;
 
 use std::io::{Read, Write};
@@ -13,41 +7,19 @@ use std::fs::File;
 use std::fs;
 use std::time;
 
-use crypto::digest::Digest;
-use crypto::md5::Md5;
-
-use walkdir::{WalkDir};
+use walkdir::WalkDir;
 
 use zip::result::ZipError;
 
 mod compress;
+mod hash;
 
-
-/*
- * Got file md5
- */
-fn get_md5(file_path: &String, inner_path: &String) -> String {
-
-    // file md5
-    let mut buffer = Vec::new();
-    let mut hasher = Md5::new();
-
-    let mut f = File::open(file_path.to_owned()).unwrap();
-    f.read_to_end(&mut buffer).unwrap();
-    hasher.input(&buffer);
-    let file_md5 = hasher.result_str();
-
-    // file identifier: md5(md5(file) + file_path)
-    let mut id_hasher = Md5::new();
-    id_hasher.input(&(file_md5 + &inner_path).into_bytes());
-
-    id_hasher.result_str()
-}
+use hash::HashAlgorithm;
 
 /*
  * Generate directory tree info
  */
-fn path_info(path: &String) -> (HashMap<String, String>, Vec<String>) {
+fn path_info(path: &String, algorithm: HashAlgorithm) -> (HashMap<String, String>, Vec<String>) {
 
     let base_dir = path;
     let mut file_list: Vec<String> = vec![];
@@ -68,9 +40,9 @@ fn path_info(path: &String) -> (HashMap<String, String>, Vec<String>) {
             println!(" {}                                  {}", "DIR".green(), &path);
         } else {
             file_list.push(inner_path.clone());
-            let md5_str = get_md5(&path, &inner_path.clone());
-            file_dict.insert(md5_str.clone(), inner_path.clone());
-            println!("{} {} {}", "FILE".green(), md5_str, &path);
+            let hash_str = hash::compute_file_hash(&path, &inner_path.clone(), algorithm);
+            file_dict.insert(hash_str.clone(), inner_path.clone());
+            println!("{} {} {}", "FILE".green(), hash_str, &path);
         }
     }
 
@@ -168,25 +140,26 @@ fn create_package(outer_dir: &str, outer_zip: &str, method: zip::CompressionMeth
 /*
  * Create info json file about generated zip
  */
-fn create_info_file(outer_zip: &String, info_file: &String) {
+fn create_info_file(outer_zip: &String, info_file: &String, algorithm: HashAlgorithm) {
 
-    // package.zip md5
+    // package.zip hash
     let mut buffer = Vec::new();
-    let mut hasher = Md5::new();
     let mut f = File::open(&outer_zip).unwrap();
     f.read_to_end(&mut buffer).unwrap();
-    hasher.input(&buffer);
+    
+    let hash_value = hash::compute_buffer_hash(&buffer, algorithm);
 
     let metadata = fs::metadata(&outer_zip).expect("Nope");
     let file_size = metadata.len();
 
     // template json file
-    let mut buffer = File::create(&info_file).expect("Nope");
-    let info = json!({
-        "md5": hasher.result_str(),
+    let mut output = File::create(&info_file).expect("Nope");
+    let info = serde_json::json!({
+        "hash": hash_value,
+        "hash_algorithm": algorithm.name(),
         "size": file_size,
     });
-    buffer.write(info.to_string().as_bytes()).expect("Nope");
+    output.write(info.to_string().as_bytes()).expect("Nope");
 }
 
 /*
@@ -204,7 +177,17 @@ fn main() {
 
     let args: Vec<_> = std::env::args().collect();
     if args.len() < 3 {
-        println!("Usage: {} <dirx> <diry>", args[0]);
+        println!("Usage: {} <dirx> <diry> [--hash <md5|xxhash>]", args[0]);
+        println!();
+        println!("Arguments:");
+        println!("  <dirx>              Base directory (old version)");
+        println!("  <diry>              Target directory (new version)");
+        println!("  --hash <algorithm>  Hash algorithm: md5 or xxhash (default: xxhash)");
+        println!();
+        println!("Examples:");
+        println!("  {} test01 test02", args[0]);
+        println!("  {} test01 test02 --hash md5", args[0]);
+        println!("  {} test01 test02 --hash xxhash", args[0]);
         std::process::exit(1);
     }
 
@@ -214,11 +197,25 @@ fn main() {
     let base_dirx: String = remove_end_slash(&args[1]);
     let base_diry: String = remove_end_slash(&args[2]);
 
-    println!("Generate update package from {} -> {}\n", &base_dirx, &base_diry);
+    // Parse hash algorithm from command line (default: xxhash64)
+    let mut algorithm = HashAlgorithm::XxHash64;
+    if args.len() >= 5 && args[3] == "--hash" {
+        match HashAlgorithm::from_str(&args[4]) {
+            Some(algo) => algorithm = algo,
+            None => {
+                println!("{} Invalid hash algorithm: {}", "Error:".red(), args[4]);
+                println!("Supported algorithms: md5, xxhash");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    println!("Generate update package from {} -> {}", &base_dirx, &base_diry);
+    println!("Hash algorithm: {}\n", algorithm.name().yellow());
 
     // Loop for directory contain list
-    let dirx_info = path_info(&base_dirx);
-    let diry_info = path_info(&base_diry);
+    let dirx_info = path_info(&base_dirx, algorithm);
+    let diry_info = path_info(&base_diry, algorithm);
 
 
     // Generate diff info
@@ -238,7 +235,7 @@ fn main() {
                 println!("   {} {} written to {}", "done".green(), outer_dir, outer_zip);
                 fs::remove_dir_all(&outer_dir).expect("Nope");
                 let info_file = String::from("info.json");
-                create_info_file(&outer_zip, &info_file);
+                create_info_file(&outer_zip, &info_file, algorithm);
             },
             Err(e) => println!("Error: {:?}", e),
         }

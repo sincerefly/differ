@@ -2,10 +2,7 @@
 
 ![differ](./differ.jpg)
 
-Differ is a simple tool write with Rust, It can diff two directory and generate *package.zip* and *info.json* file.
-
-you can use it for collect upgrade file from early portable version to the latest version, just unzip *package.zip* into early version directory, then update!
-
+A fast Rust tool to compare two directories and generate incremental update packages (*package.zip* + *info.json*).
 
 
 ## Usage
@@ -16,10 +13,28 @@ Clone
 git clone https://github.com/sincerefly/differ.git
 ```
 
-Run
+### Basic Usage (Default XXHash64)
 
 ```bash
 cd differ && cargo run test01 test02
+```
+
+### Using MD5 for Compatibility
+
+```bash
+cargo run test01 test02 -- --hash md5
+```
+
+
+### Command Line Options
+
+```
+Usage: differ <dirx> <diry> [--hash <md5|xxhash>]
+
+Arguments:
+  <dirx>              Base directory (old version)
+  <diry>              Target directory (new version)
+  --hash <algorithm>  Hash algorithm: md5 or xxhash (default: xxhash)
 ```
 
 Output
@@ -29,9 +44,9 @@ Output
 
 > Diff Info
 
- + f3259ffb1c692d6d17b903a814b2fda6 index.js
- + a87ff679a2f3e71d9181a67b7542122c md/4.md
- + 74ead4b39e6cb4f9276ec47466a46071 images/1358088901064.jpg
+ + 0b279002a376ce0f index.js
+ + acfa5c659f8b720e md/4.md
+ + dcd978ae7fce575c images/1358088901064.jpg
 
 > Collect
 
@@ -46,9 +61,12 @@ Output
  adding __package/index.js as index.js
    done __package written to package.zip
 
-time spend: 184.721768ms
+time spend: 16.185ms
 Success!
 ```
 
-
+Generated `info.json` with XXHash64:
+```json
+{"hash":"73e2f0450fce4573","hash_algorithm":"xxhash64","size":183235}
+```
 
